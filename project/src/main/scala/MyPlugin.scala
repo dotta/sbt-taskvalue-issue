@@ -13,39 +13,32 @@ object MyPlugin extends AutoPlugin {
   import autoImport._
 
   override def globalSettings = Seq(
-      concurrentRestrictions += Tags.limit(MyTag, 1)
+      concurrentRestrictions ++= Seq(
+        Tags.limit(MyTag, 1)
+        // Uncomment this and compilation is carried out sequentially
+        /*, Tags.limit(Tags.CPU, 1)*/)
   )
 
   override def projectSettings =
     inConfig(Compile)(compileSettings) ++ inConfig(Test)(compileSettings)
 
   private def compileSettings: Seq[Def.Setting[_]] = Seq(
-    ///*
-    // THIS DOESN'T WORKS: Concurrent restrictions for MyTag are NOT taken into account.
+    compileIncremental := {
+        compileIncremental.tag(MyTag).value
+    }
+    // Alternative implementation, exactly same problem
+    /*
     compileIncremental := Def.taskDyn {
         val compileIncrementalTask = compileIncremental.taskValue
-        Def.task(compileIncrementalTask.tag(MyTag).value)
-    }.value
-    //*/
-    /*
-    // THIS WORKS: Concurrent restrictions for MyTag are correctly taken into account
-    // However, `Defaults.compileIncrementalTask` is explicitly called, which is not ideal.
-    // Ideally, we would like to call `compileIncremental`, but doing so here in place of
-    // `Defaults.compileIncrementalTask` results in a deadlock when executing `;clean;compile`.
-    // (Hence, the behavior described in
-    // https://www.scala-sbt.org/1.x/docs/Tasks.html#Modifying+an+Existing+Task doesn't work
-    // when a task is tagged - which seems a distinct problem from the one due to the usage of
-    // taskValue)
-    compileIncremental := Def.taskDyn {
-        Def.task(Defaults.compileIncrementalTask.tag(MyTag).value)
+        Def.task(compileIncrementalTask.value).tag(MyTag)
     }.value
     */
+    // Alternative implementation that WORKS (but it's not ideal as it introduces
+    // coupling with the sbt implementation, i.e., Defaults.compileIncrementalTask)
     /*
-    // This deadlocks when calling ';clean;compile'
-    compileIncremental := Def.taskDyn {
-        Def.task(compileIncremental.tag(MyTag).value)
-    }.value
+    compileIncremental := {
+        Defaults.compileIncrementalTask.tag(MyTag).value
+    }
     */
   )
-
 }
